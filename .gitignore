@@ -1,0 +1,29 @@
+# Binarios compilados
+bin/
+server_p1
+server_p2
+dbservice
+client
+testing
+*.exe
+
+# Base de datos SQLite
+*.db
+*.db-shm
+*.db-wal
+
+# Resultados de benchmark
+resultados_*.txt
+*.txt
+
+# Módulo de Go
+# go.sum
+
+# IDEs
+.idea/
+.vscode/
+*.code-workspace
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
