@@ -7,10 +7,6 @@ client
 testing
 *.exe
 
-# Base de datos SQLite
-*.db
-*.db-shm
-*.db-wal
 
 # Resultados de benchmark
 resultados_*.txt

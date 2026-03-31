@@ -15,7 +15,7 @@
 Sistema de inventario de armamento con dos implementaciones:
 
 - **Parte 1**: API RESTful con almacenamiento en memoria volátil (los datos se pierden al reiniciar).
-- **Parte 2**: API RESTful con almacenamiento persistente en SQLite, distribuida en 3 máquinas virtuales.
+- **Parte 2**: API RESTful con almacenamiento persistente en PostgreSQL, distribuida en 3 máquinas virtuales.
 
 ---
 
@@ -25,7 +25,7 @@ Sistema de inventario de armamento con dos implementaciones:
 |-----|----|-------------|
 | MV1 | `10.10.28.20` | Cliente CLI |
 | MV2 | `10.10.28.21` | Servidor API RESTful (Gin) |
-| MV3 | `10.10.28.22` | Servicio de base de datos (SQLite) |
+| MV3 | `10.10.28.22` | Servicio de base de datos (PostgreSQL) |
 
 ---
 
@@ -42,7 +42,7 @@ tarea1/
 │   ├── server/
 │   │   └── main.go        # Servidor proxy a BD (MV2)
 │   └── dbservice/
-│       └── main.go        # Servicio SQLite (MV3)
+│       └── main.go        # Servicio PostgreSQL (MV3)
 ├── client/
 │   └── main.go            # Cliente CLI (MV1)
 └── testing/
@@ -90,16 +90,39 @@ scp bin/client bin/testing ubuntu@10.10.28.20:~
 ./client -server http://10.10.28.21:8080
 ```
 
-### Parte 2 — SQLite persistente
+### Parte 2 — PostgreSQL persistente
+
+**Paso 1: Configurar PostgreSQL en MV3**
 
 ```bash
-# MV3: iniciar servicio de base de datos
-./dbservice -port 8081
+# Instalar PostgreSQL (si no está instalado)
+sudo apt update && sudo apt install -y postgresql
 
-# MV2: iniciar servidor (apunta a MV3)
+# Crear la base de datos y el usuario
+sudo -u postgres psql -c "CREATE USER weapons_user WITH PASSWORD 'weapons_pass';"
+sudo -u postgres psql -c "CREATE DATABASE weapons OWNER weapons_user;"
+```
+
+**Paso 2: Iniciar el servicio de BD en MV3**
+
+```bash
+./dbservice -port 8081 \
+  -pg-host localhost \
+  -pg-port 5432 \
+  -pg-user weapons_user \
+  -pg-pass weapons_pass \
+  -pg-db weapons
+```
+
+**Paso 3: Iniciar el servidor en MV2**
+
+```bash
 ./server_p2 -port 8080 -db http://10.10.28.22:8081
+```
 
-# MV1: iniciar cliente (misma interfaz)
+**Paso 4: Iniciar el cliente en MV1**
+
+```bash
 ./client -server http://10.10.28.21:8080
 ```
 
@@ -120,7 +143,11 @@ scp bin/client bin/testing ubuntu@10.10.28.20:~
 | `server_p1` / `server_p2` | `-port` | `8080` | Puerto del servidor |
 | `server_p2` | `-db` | `http://10.10.28.22:8081` | URL del servicio de BD |
 | `dbservice` | `-port` | `8081` | Puerto del servicio de BD |
-| `dbservice` | `-db-path` | `weapons.db` | Ruta del archivo SQLite |
+| `dbservice` | `-pg-host` | `localhost` | Host de PostgreSQL |
+| `dbservice` | `-pg-port` | `5432` | Puerto de PostgreSQL |
+| `dbservice` | `-pg-user` | `postgres` | Usuario de PostgreSQL |
+| `dbservice` | `-pg-pass` | *(vacío)* | Contraseña de PostgreSQL |
+| `dbservice` | `-pg-db` | `weapons` | Nombre de la base de datos |
 | `client` | `-server` | `http://localhost:8080` | URL del servidor |
 | `testing` | `-server` | `http://localhost:8080` | URL del servidor a testear |
 | `testing` | `-n` | `100` | Peticiones por endpoint |
@@ -163,14 +190,14 @@ La versión con **memoria volátil** es más rápida porque todas las operacione
 
 La versión **persistente** presenta mayor latencia por dos razones acumuladas:
 
-1. **I/O de disco**: SQLite escribe y lee datos desde el sistema de archivos de MV3. Las operaciones de escritura (`POST`, `PATCH`) requieren sincronización con disco para garantizar durabilidad.
+1. **I/O de disco y motor de BD**: PostgreSQL escribe y lee datos desde el sistema de archivos de MV3, gestionando transacciones con garantías ACID. Las operaciones de escritura (`POST`, `PATCH`) implican escritura en WAL (Write-Ahead Log) y sincronización.
 2. **Latencia de red**: El servidor en MV2 debe realizar una petición HTTP adicional a MV3 por cada operación del cliente. Esto añade el tiempo de ida y vuelta entre ambas VMs (RTT de red).
 
 ### Decisión: ¿cuál solución es más conveniente?
 
 Para el contexto planteado (inventario de armamento en zona de combate), la solución **persistente (Parte 2)** es claramente la más conveniente, pese a su mayor latencia, por las siguientes razones:
 
-- **Durabilidad**: El evento del droide DRK-1 demuestra que cortes de energía son una amenaza real. Con memoria volátil, cualquier fallo implica pérdida total del inventario. La base de datos en MV3 sobrevive reinicios del servidor.
+- **Durabilidad**: El evento del droide DRK-1 demuestra que cortes de energía son una amenaza real. Con memoria volátil, cualquier fallo implica pérdida total del inventario. PostgreSQL en MV3 sobrevive reinicios del servidor gracias a sus garantías ACID.
 - **Disponibilidad del dato**: Almacenar los datos en una máquina separada (MV3) con menos riesgo de ataque, como propone Fives, protege el inventario ante compromisos físicos de MV2.
 - **La diferencia de latencia es aceptable**: En este dominio, unos milisegundos adicionales por petición no son críticos frente a la pérdida total de información operacional en combate.
 
@@ -182,5 +209,4 @@ La memoria volátil solo sería preferible si la velocidad de respuesta fuera es
 
 - El cliente es idéntico para ambas partes. El cambio de API es transparente: solo varía la URL del servidor con el flag `-server`.
 - La herramienta de benchmark limita las peticiones PATCH a un máximo de 999 para no exceder el stock inicial de 1000 unidades.
-- `modernc.org/sqlite` se usa en lugar de `github.com/mattn/go-sqlite3` para evitar la dependencia de CGO, facilitando la compilación cruzada para Linux desde Windows.
 - Si se utiliza asistencia por IA: se usó Claude Code para la generación inicial de los archivos `parte1/server/main.go`, `parte2/server/main.go`, `parte2/dbservice/main.go`, `client/main.go` y `testing/main.go`. Se revisó y validó el código generado. Los comentarios automáticos de la herramienta fueron eliminados y reemplazados por comentarios propios del grupo.
