@@ -4,7 +4,7 @@
 
 | Nombre | Apellido | Rol |
 |--------|----------|-----|
-| [Nombre 1] | [Apellido 1] | [ROL-1] |
+| Carlos | Ramírez | 202192826-k |
 | [Nombre 2] | [Apellido 2] | [ROL-2] |
 | [Nombre 3] | [Apellido 3] | [ROL-3] |
 
