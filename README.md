@@ -5,7 +5,7 @@
 | Nombre | Apellido | Rol |
 |--------|----------|-----|
 | Carlos | Ramírez | 202192826-k |
-| [Nombre 2] | [Apellido 2] | [ROL-2] |
+| Michael | [Fleming | 201873044-0 |
 | [Nombre 3] | [Apellido 3] | [ROL-3] |
 
 ---
