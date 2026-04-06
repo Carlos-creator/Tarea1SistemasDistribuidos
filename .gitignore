@@ -3,7 +3,6 @@ bin/
 server_p1
 server_p2
 dbservice
-client
 testing
 *.exe
 
